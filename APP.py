@@ -739,9 +739,8 @@ try:
      # ==============================
      # 分頁 9：HAC 分析
      # ==============================
-       with tab9:
+    with tab9:
         st.subheader("🧪 Newey-West HAC 分析")
-
         st.caption(
             "比較一般 OLS 與 Newey-West HAC 修正後的標準誤、P 值與顯著性。"
         )
