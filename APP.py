@@ -305,7 +305,7 @@ try:
     target_y = st.selectbox("選擇分析應變數 (Y)", columns_rate, index=default_index, label_visibility="collapsed")
 
     # 建立標籤頁
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         "📊 1. 獨立影響完整報告",
         "🔥 2. 相關係數熱力圖",
         "📈 3. 變動率走勢圖",
@@ -313,7 +313,8 @@ try:
         "💰 5. 絕對價格走勢",
         "📄 6. 單一變數詳細報表",
         "🏆 7. 多變量複迴歸 (自動篩選)",
-        "🔬 8. 穩定幣穩定性研究"
+        "🔬 8. 穩定幣穩定性研究",
+        "🧪 9. HAC 分析"
     ])
 
     # ---------- 分頁 1：獨立影響完整報告 ----------
@@ -734,6 +735,14 @@ try:
 
         except FileNotFoundError:
             st.error("❌ 找不到資料檔案，請確認 CSV 檔案與 APP.py 在同一目錄。")
+
+     # ==============================
+     # 分頁 9：HAC 分析
+     # ==============================
+    with tab9:
+        st.subheader("🧪 Newey-West HAC 分析")
+
+        st.write("此頁面將比較一般 OLS 與 HAC 修正後的統計結果。")
 
 except FileNotFoundError:
     st.error("❌ 找不到核心資料檔案。")
