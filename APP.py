@@ -739,10 +739,220 @@ try:
      # ==============================
      # 分頁 9：HAC 分析
      # ==============================
-    with tab9:
+       with tab9:
         st.subheader("🧪 Newey-West HAC 分析")
 
-        st.write("此頁面將比較一般 OLS 與 HAC 修正後的統計結果。")
+        st.caption(
+            "比較一般 OLS 與 Newey-West HAC 修正後的標準誤、P 值與顯著性。"
+        )
 
+        # 可分析幣別：只顯示資料集中實際存在的欄位
+        coin_list = [
+            "USDT",
+            "USDC",
+            "USDe",
+            "USDS",
+            "DAI",
+            "PayPal USD",
+            "PAXG_Price"
+        ]
+
+        available_coins = [
+            coin for coin in coin_list
+            if coin in numeric_df_rate.columns
+        ]
+
+        if not available_coins:
+            st.warning("目前資料集中找不到可分析的幣別。")
+
+        else:
+            # 1. 選擇應變數 Y
+            hac_y = st.selectbox(
+                "🎯 選擇穩定幣 Y",
+                available_coins,
+                key="hac_y"
+            )
+
+            # 金融市場變數
+            market_vars = [
+                "bitcoin",
+                "S&P500",
+                "NASDAQ_Price",
+                "道瓊平均工業指數",
+                "VIX",
+                "DXY_Index",
+                "USD/EUR",
+                "USD/JPY",
+                "USD/CNY",
+                "美國公債10年期殖利率",
+                "T10YIE(類似通膨日資料)",
+                "聯準會利率",
+                "UNRATE"
+            ]
+
+            available_x = [
+                x for x in market_vars
+                if x in numeric_df_rate.columns
+            ]
+
+            # 2. 選擇自變數 X
+            hac_xs = st.multiselect(
+                "📊 選擇自變數 X",
+                options=available_x,
+                default=available_x[:6],
+                key="hac_xs"
+            )
+
+            # 3. HAC 落後期數
+            hac_lag = st.number_input(
+                "⏱️ HAC 最大落後期數（Maxlags）",
+                min_value=1,
+                max_value=30,
+                value=8,
+                step=1,
+                key="hac_lag"
+            )
+
+            # 4. 執行
+            if st.button("🚀 執行 HAC 分析", key="run_hac"):
+
+                if len(hac_xs) == 0:
+                    st.error("請至少選擇一個自變數 X。")
+
+                else:
+                    reg_data = numeric_df_rate[
+                        [hac_y] + hac_xs
+                    ].dropna()
+
+                    if len(reg_data) < len(hac_xs) + 10:
+                        st.error(
+                            f"有效樣本數不足，目前只有 {len(reg_data)} 筆。"
+                        )
+
+                    else:
+                        y_hac = reg_data[hac_y]
+                        X_hac = sm.add_constant(reg_data[hac_xs])
+
+                        # 一般 OLS
+                        ols_model = sm.OLS(
+                            y_hac,
+                            X_hac
+                        ).fit()
+
+                        # Newey-West HAC
+                        hac_model = sm.OLS(
+                            y_hac,
+                            X_hac
+                        ).fit(
+                            cov_type="HAC",
+                            cov_kwds={
+                                "maxlags": int(hac_lag)
+                            }
+                        )
+
+                        # 5. 模型資訊
+                        st.markdown("### 📈 模型資訊")
+
+                        c1, c2, c3, c4 = st.columns(4)
+
+                        c1.metric("分析幣別", hac_y)
+                        c2.metric(
+                            "樣本數 N",
+                            f"{int(hac_model.nobs):,}"
+                        )
+                        c3.metric(
+                            "R²",
+                            f"{hac_model.rsquared:.4f}"
+                        )
+                        c4.metric(
+                            "HAC Lag",
+                            str(hac_lag)
+                        )
+
+                        # 6. 比較 OLS 與 HAC
+                        variable_names = X_hac.columns.tolist()
+
+                        ols_p = np.asarray(ols_model.pvalues)
+                        hac_p = np.asarray(hac_model.pvalues)
+
+                        changes = []
+
+                        for p_ols, p_hac in zip(ols_p, hac_p):
+
+                            if p_ols < 0.05 and p_hac >= 0.05:
+                                changes.append("⚠️ 顯著 → 不顯著")
+
+                            elif p_ols >= 0.05 and p_hac < 0.05:
+                                changes.append("⭐ 不顯著 → 顯著")
+
+                            elif p_ols < 0.05 and p_hac < 0.05:
+                                changes.append("✅ 皆顯著")
+
+                            else:
+                                changes.append("— 皆不顯著")
+
+                        hac_table = pd.DataFrame({
+                            "變數": variable_names,
+                            "迴歸係數": np.asarray(hac_model.params),
+                            "OLS 標準誤": np.asarray(ols_model.bse),
+                            "HAC 標準誤": np.asarray(hac_model.bse),
+                            "OLS P值": ols_p,
+                            "HAC P值": hac_p,
+                            "HAC t值": np.asarray(hac_model.tvalues),
+                            "修正前後": changes
+                        })
+
+                        st.markdown("### 🔍 OLS 與 HAC 比較")
+
+                        st.dataframe(
+                            hac_table.style.format({
+                                "迴歸係數": "{:.6f}",
+                                "OLS 標準誤": "{:.6f}",
+                                "HAC 標準誤": "{:.6f}",
+                                "OLS P值": "{:.4e}",
+                                "HAC P值": "{:.4e}",
+                                "HAC t值": "{:.4f}"
+                            }),
+                            use_container_width=True
+                        )
+
+                        # 7. HAC 後仍顯著的變數
+                        significant_hac = hac_table[
+                            (hac_table["變數"] != "const")
+                            &
+                            (hac_table["HAC P值"] < 0.05)
+                        ]
+
+                        st.markdown("### ⭐ HAC 修正後顯著變數")
+
+                        if significant_hac.empty:
+                            st.info(
+                                "HAC 修正後沒有變數達到 P < 0.05。"
+                            )
+
+                        else:
+                            st.dataframe(
+                                significant_hac[
+                                    [
+                                        "變數",
+                                        "迴歸係數",
+                                        "HAC P值",
+                                        "修正前後"
+                                    ]
+                                ],
+                                use_container_width=True
+                            )
+
+                        # 8. 下載結果
+                        csv_hac = hac_table.to_csv(
+                            index=False
+                        ).encode("utf-8-sig")
+
+                        st.download_button(
+                            "📥 下載 HAC 分析結果",
+                            data=csv_hac,
+                            file_name=f"{hac_y}_HAC分析結果.csv",
+                            mime="text/csv"
+                        )
 except FileNotFoundError:
     st.error("❌ 找不到核心資料檔案。")
